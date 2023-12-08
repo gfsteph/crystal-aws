@@ -48,6 +48,26 @@ module AWS
         end
       end
 
+      def send_fifo_message(
+           queue_url : URI,
+           message_body : String,
+         )
+        http(queue_url.host.not_nil!) do |http|
+          headers = DEFAULT_HEADERS.dup.merge!({
+                                                 "Host" => queue_url.host.not_nil!,
+                                                 "Content-Type" => "application/x-www-form-urlencoded",
+                                               })
+          params = HTTP::Params {
+            "Action" => "SendMessage",
+            "MessageGroupId" => queue_url.to_s,
+            "MessageBody" => message_body
+          }
+          response = http.post(queue_url.path, body: params.to_s, headers: headers)
+          #puts response.body.to_s
+          SendMessageResponse.from_xml response.body
+        end
+      end
+
       def delete_message(queue_url : URI, receipt_handle : String)
         http(queue_url.host.not_nil!) do |http|
           params = HTTP::Params.encode({
@@ -111,10 +131,11 @@ module AWS
         end
       end
 
-      def create_fifo_queue(queue_name name : String)
+      def create_fifo_queue(queue_name : String)
         http do |http|
-          params = HTTP::Params{"Action" => "CreateQueue", "QueueName" => name, "attributes" => "{\"FifoQueue\" : \"True\" }"}
-          response = http.post("/?#{params}", body: { "attributes" => {"FifoQueue" => "True" }}.to_json.to_s)
+          params = HTTP::Params{"Action" => "CreateQueue", "QueueName" => queue_name,
+                                "Attribute.1.Name" => "FifoQueue", "Attribute.1.Value" => "True" }
+          response = http.post("/?#{params}")
           if response.success?
             Queue.from_xml response.body
           else
