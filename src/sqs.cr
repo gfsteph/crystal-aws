@@ -51,6 +51,7 @@ module AWS
       def send_fifo_message(
            queue_url : URI,
            message_body : String,
+           dedup_id : String
          )
         http(queue_url.host.not_nil!) do |http|
           headers = DEFAULT_HEADERS.dup.merge!({
@@ -60,10 +61,10 @@ module AWS
           params = HTTP::Params {
             "Action" => "SendMessage",
             "MessageGroupId" => queue_url.to_s,
+            "MessageDeduplicationId" => dedup_id,
             "MessageBody" => message_body
           }
           response = http.post(queue_url.path, body: params.to_s, headers: headers)
-          #puts response.body.to_s
           SendMessageResponse.from_xml response.body
         end
       end
@@ -239,10 +240,15 @@ module AWS
         if xml.document?
           from_xml xml.root.not_nil!
         else
+          begin
           new(
             send_message_result: SendMessageResult.from_xml(xml.xpath_node("./xmlns:SendMessageResult").not_nil!),
             response_metadata: ResponseMetadata.from_xml(xml.xpath_node("./xmlns:ResponseMetadata").not_nil!),
           )
+          rescue smrex
+            Log.error { "Make sure the queue is FIFO and has deduplication enabled or " +
+                        "deduplicationID is set on send :\n#{smrex.backtrace}" }
+          end
         end
       end
 
