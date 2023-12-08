@@ -10,35 +10,35 @@ module AWS
       SERVICE_NAME = "sqs"
 
       def receive_message(
-        queue_url : URI,
-        max_number_of_messages : Int = 1,
-        wait_time_seconds : Int = 0,
-      )
+           queue_url : URI,
+           max_number_of_messages : Int = 1,
+           wait_time_seconds : Int = 0,
+         )
         params = HTTP::Params.encode({
-          Action: "ReceiveMessage",
-          MaxNumberOfMessages: max_number_of_messages.to_s,
-          WaitTimeSeconds: wait_time_seconds.to_s,
-          "AttributeName.1": "All",
-          "MessageAttributeName.1": "All",
-        })
+                                       Action: "ReceiveMessage",
+                                       MaxNumberOfMessages: max_number_of_messages.to_s,
+                                       WaitTimeSeconds: wait_time_seconds.to_s,
+                                       "AttributeName.1": "All",
+                                       "MessageAttributeName.1": "All",
+                                     })
 
         xml = XML.parse(
           http(queue_url.host.not_nil!, &.get(
-            "#{queue_url.path}?#{params}"
-          )).body
+                 "#{queue_url.path}?#{params}"
+               )).body
         )
         ReceiveMessageResult.from_xml(xml)
       end
 
       def send_message(
-        queue_url : URI,
-        message_body : String,
-      )
+           queue_url : URI,
+           message_body : String,
+         )
         http(queue_url.host.not_nil!) do |http|
           headers = DEFAULT_HEADERS.dup.merge!({
-            "Host" => queue_url.host.not_nil!,
-            "Content-Type" => "application/x-www-form-urlencoded",
-          })
+                                                 "Host" => queue_url.host.not_nil!,
+                                                 "Content-Type" => "application/x-www-form-urlencoded",
+                                               })
           params = HTTP::Params {
             "Action" => "SendMessage",
             "MessageBody" => message_body
@@ -51,9 +51,9 @@ module AWS
       def delete_message(queue_url : URI, receipt_handle : String)
         http(queue_url.host.not_nil!) do |http|
           params = HTTP::Params.encode({
-            Action: "DeleteMessage",
-            ReceiptHandle: receipt_handle,
-          })
+                                         Action: "DeleteMessage",
+                                         ReceiptHandle: receipt_handle,
+                                       })
 
           http
             .delete("#{queue_url.path}?#{params}")
@@ -62,9 +62,9 @@ module AWS
       end
 
       def delete_message_batch(
-        queue_url : URI,
-        delete_message_batch_request_entries messages : Enumerable(Message),
-      )
+           queue_url : URI,
+           delete_message_batch_request_entries messages : Enumerable(Message),
+         )
         http(queue_url.host.not_nil!) do |http|
           params = HTTP::Params{"Action" => "DeleteMessageBatch"}
           messages.each_with_index(1) do |message, index|
@@ -84,10 +84,10 @@ module AWS
       end
 
       def change_message_visibility_batch(
-        queue_url : URI,
-        change_message_visibility_batch_request_entries messages : Enumerable(Message),
-        visibility_timeout : Int32 | String,
-      )
+           queue_url : URI,
+           change_message_visibility_batch_request_entries messages : Enumerable(Message),
+                                                           visibility_timeout : Int32 | String,
+         )
         http(queue_url.host.not_nil!) do |http|
           params = HTTP::Params{"Action" => "DeleteMessageBatch"}
           messages.each_with_index(1) do |message, index|
@@ -103,6 +103,18 @@ module AWS
         http do |http|
           params = HTTP::Params{"Action" => "CreateQueue", "QueueName" => name}
           response = http.post("/?#{params}")
+          if response.success?
+            Queue.from_xml response.body
+          else
+            raise "AWS::SQS#create_queue: #{XML.parse(response.body).to_xml}"
+          end
+        end
+      end
+
+      def create_fifo_queue(queue_name name : String)
+        http do |http|
+          params = HTTP::Params{"Action" => "CreateQueue", "QueueName" => name, "attributes" => "{\"FifoQueue\" : \"True\" }"}
+          response = http.post("/?#{params}", body: { "attributes" => {"FifoQueue" => "True" }}.to_json.to_s)
           if response.success?
             Queue.from_xml response.body
           else
@@ -201,7 +213,7 @@ module AWS
       def self.from_xml(xml : String)
         from_xml XML.parse xml
       end
-      
+
       def self.from_xml(xml : XML::Node)
         if xml.document?
           from_xml xml.root.not_nil!
@@ -212,13 +224,13 @@ module AWS
           )
         end
       end
-      
+
       getter send_message_result : SendMessageResult
       getter response_metadata : ResponseMetadata
-      
+
       def initialize(@send_message_result, @response_metadata)
       end
-      
+
       struct SendMessageResult
         def self.from_xml(xml : XML::Node)
           new(
@@ -226,18 +238,18 @@ module AWS
             md5_of_message_body: xml.xpath_string("string(./xmlns:MD5OfMessageBody)"),
           )
         end
-        
+
         def initialize(@message_id : UUID, md5_of_message_body : String)
         end
       end
-      
+
       struct ResponseMetadata
         def self.from_xml(xml : XML::Node)
           new(
             request_id: UUID.new(xml.xpath_string("string(./xmlns:RequestId)")),
           )
         end
-        
+
         def initialize(@request_id : UUID)
         end
       end
