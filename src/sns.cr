@@ -12,20 +12,56 @@ module AWS
 
       def publish(topic_arn : String, message : String, subject : String = "")
         response = http(&.post(
-          path: "/",
-          form: {
-            "Action" => "Publish",
-            "TopicArn" => topic_arn,
-            "Message" => message,
-            "Subject" => subject,
-            "Version" => "2010-03-31",
-          }.select { |key, value| !value.empty? },
-        ))
+                          path: "/",
+                          form: {
+                            "Action" => "Publish",
+                            "TopicArn" => topic_arn,
+                            "Message" => message,
+                            "Subject" => subject,
+                            "Version" => "2010-03-31",
+                          }.select { |key, value| !value.empty? },
+                        ))
 
         if response.success?
           true
         else
           raise "AWS::SNS#publish: #{XML.parse(response.body).to_xml}"
+        end
+      end
+
+      def publish_fifo(topic_arn : String, dedup_id : String, message : String, subject : String = "")
+        response = http(&.post(
+                          path: "/",
+                          form: {
+                            "Action" => "Publish",
+                            "TopicArn" => topic_arn,
+                            "Message" => message,
+                            "Subject" => subject,
+                            "Version" => "2010-03-31",
+                            "MessageGroupId" => topic_arn.to_s,
+                            "MessageDeduplicationId" => dedup_id,
+                          }.select { |key, value| !value.empty? },
+                        ))
+
+        if response.success?
+          true
+        else
+          raise "AWS::SNS#publish: #{XML.parse(response.body).to_xml}"
+        end
+      end
+
+
+      def create_fifo_topic(name : String)
+        http do |http|
+          params = HTTP::Params{ "Action" => "CreateTopic", "Name" => name,
+                                 "Attributes.entry.1.key" => "FifoTopic", "Attributes.entry.1.value" => "True" }
+          response = http.post("/?#{params}")
+
+          if response.success?
+            Topic.from_xml response.body
+          else
+            raise "AWS::SNS#create_topic: #{XML.parse(response.body).to_xml}"
+          end
         end
       end
 
@@ -48,15 +84,15 @@ module AWS
       end
 
       def subscribe(
-        topic : Topic,
-        queue : SQS::Queue,
-        sqs = SQS::Client.new(
-          access_key_id: access_key_id,
-          secret_access_key: secret_access_key,
-          region: region,
-          endpoint: endpoint,
-        ),
-      )
+           topic : Topic,
+           queue : SQS::Queue,
+           sqs = SQS::Client.new(
+             access_key_id: access_key_id,
+             secret_access_key: secret_access_key,
+             region: region,
+             endpoint: endpoint,
+           ),
+         )
         subscribe(
           topic_arn: topic.arn,
           protocol: "sqs",
@@ -65,10 +101,10 @@ module AWS
       end
 
       def subscribe(
-        topic_arn : String,
-        protocol : String,
-        endpoint : String,
-      )
+           topic_arn : String,
+           protocol : String,
+           endpoint : String,
+         )
         http do |http|
           response = http.post(
             path: "/",

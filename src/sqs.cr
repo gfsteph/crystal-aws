@@ -241,10 +241,10 @@ module AWS
           from_xml xml.root.not_nil!
         else
           begin
-          new(
-            send_message_result: SendMessageResult.from_xml(xml.xpath_node("./xmlns:SendMessageResult").not_nil!),
-            response_metadata: ResponseMetadata.from_xml(xml.xpath_node("./xmlns:ResponseMetadata").not_nil!),
-          )
+            new(
+              send_message_result: SendMessageResult.from_xml(xml.xpath_node("./xmlns:SendMessageResult").not_nil!),
+              response_metadata: ResponseMetadata.from_xml(xml.xpath_node("./xmlns:ResponseMetadata").not_nil!),
+            )
           rescue smrex
             Log.error { "Make sure the queue is FIFO and has deduplication enabled or " +
                         "deduplicationID is set on send :\n#{smrex.backtrace}" }
